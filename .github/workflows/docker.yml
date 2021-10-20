@@ -3,7 +3,7 @@ on:
   # schedule:
   #   - cron: '0 0 * * 1,3,6' # @at 0h0m0s every 3 days
   push:
-    branches: [master]
+    branches: [main]
 jobs:
   docker:
     runs-on: ubuntu-latest
