@@ -6,6 +6,7 @@ OpenStackSwift is a Golang server that responds to the same calls Openstack Swif
 
 OpenStackSwift doesn't support all of the Swift command set, but the basic ones like upload (with TTL), download, list, copy, authentication, and make containers are supported. More coming soon™.
 
+[https://hub.docker.com/r/mdouchement/openstackswift](https://hub.docker.com/r/mdouchement/openstackswift)
 
 ## Running
 ```bash
