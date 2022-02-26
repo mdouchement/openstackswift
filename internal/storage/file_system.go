@@ -64,7 +64,7 @@ func (b *fs) Copy(sc, so, dc, do string) error {
 
 	_, err = io.Copy(dst, src)
 	if err != nil {
-		return errors.Wrap(err, "copy:")
+		return errors.Wrap(err, "copy")
 	}
 
 	err = dst.Sync()
@@ -133,10 +133,12 @@ func (b *fs) Cleanup() error {
 			return nil
 		}
 
-		var base string
-		for _, segment := range strings.Split(filepath.Dir(path), string(os.PathSeparator)) {
+		trimmedpath := strings.Replace(path, b.workspace, "", 1)
+		base := b.workspace
+
+		for _, segment := range strings.Split(filepath.Dir(trimmedpath), string(os.PathSeparator)) {
 			base = filepath.Join(base, segment)
-			if base == "storage" {
+			if !strings.HasPrefix(base, b.workspace) {
 				continue
 			}
 			stats[base]++
@@ -165,47 +167,4 @@ func (b *fs) mkdirAll(container, object string) {
 	if !b.Exist(container, object) {
 		os.MkdirAll(filepath.Join(b.workspace, container, object), 0755)
 	}
-}
-
-func (b *fs) findEmptyDirectory() ([]string, error) {
-	count := map[string]int{}
-
-	err := filepath.Walk(b.workspace, func(path string, info fspkg.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			if path == b.workspace {
-				return nil
-			}
-			count[path] = 0
-			return nil
-		}
-
-		if strings.HasSuffix(path, ".DS_Store") {
-			return nil
-		}
-
-		var base string
-		for _, segment := range strings.Split(filepath.Dir(path), string(os.PathSeparator)) {
-			base = filepath.Join(base, segment)
-			if base == "storage" {
-				continue
-			}
-			count[base]++
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	var dirnames []string
-	for k, v := range count {
-		if v == 0 {
-			dirnames = append(dirnames, k)
-		}
-	}
-	return dirnames, nil
 }

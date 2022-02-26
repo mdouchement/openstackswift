@@ -65,6 +65,7 @@ func Start(c Controller) {
 			log.Infof("Removed %s", path.Join(container.Name, object.Key))
 		}
 
+		log.Info("Storage cleanup")
 		err = c.Storage.Cleanup()
 		if err != nil {
 			log.Error(err)
