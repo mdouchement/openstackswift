@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"path"
 	"sort"
-	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -108,24 +107,12 @@ func EchoEngine(ctrl Controller) *echo.Echo {
 			return object.Upload(c)
 		}
 	}, auth)
-	// FIXME: https://github.com/labstack/echo/issues/1952
 	swift.Add("COPY", "/:container/:object", func(c echo.Context) error {
 		c.Set("object_source", path.Join(c.Param("container"), c.Param("object")))
 		c.Set("object_destination", c.Request().Header.Get("Destination"))
 		return object.Copy(c)
 	}, auth)
-	// Workaround for #1952
-	echo.MethodNotAllowedHandler = func(c echo.Context) error {
-		if c.Request().Header.Get("X-Auth-Token") != CraftToken(ctrl.Username) {
-			return c.NoContent(http.StatusUnauthorized)
-		}
-		if c.Request().Method != "COPY" {
-			return echo.ErrMethodNotAllowed
-		}
-		c.Set("object_source", strings.ReplaceAll(c.Request().URL.Path, "/v1/AUTH_"+ctrl.Username+"/", ""))
-		c.Set("object_destination", c.Request().Header.Get("Destination"))
-		return object.Copy(c)
-	}
+
 	swift.DELETE("/:container/:object", object.Delete, auth)
 
 	return engine
