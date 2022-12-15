@@ -80,7 +80,7 @@ func (s *ObjectCopier) Checksum() string {
 // The semantics are the same for both static and dynamic large objects.
 // When copying large objects, the COPY operation does not create
 // a manifest object but a normal object with content same as
-//what you would get on a GET request to the original manifest object.
+// what you would get on a GET request to the original manifest object.
 // https://docs.openstack.org/swift/latest/api/large_objects.html
 type ManifestCopier struct {
 	database  database.Client

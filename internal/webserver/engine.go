@@ -141,6 +141,6 @@ func PrintRoutes(e *echo.Echo) {
 }
 
 // CraftToken returns the auth token for a user.
-func CraftToken(unsername string) string {
-	return "tk_" + unsername
+func CraftToken(username string) string {
+	return "tk_" + username
 }

@@ -1,6 +1,6 @@
 package model
 
-// A Manifest represents aggregates an blob accross several Objects used by chunked upload.
+// A Manifest represents aggregates an blob across several Objects used by chunked upload.
 type Manifest struct {
 	Base `json:",inline" storm:"inline"`
 

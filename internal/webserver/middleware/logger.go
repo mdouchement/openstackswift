@@ -36,11 +36,11 @@ func Logger(logger logger.Logger) echo.MiddlewareFunc {
 			res := c.Response()
 			path := req.URL.Path
 
-			handleMmethod := fmt.Sprintf("%s", c.Get("handler_method"))
-			if handleMmethod == "%!s(<nil>)" {
-				handleMmethod = "-"
+			handleMethod := fmt.Sprintf("%s", c.Get("handler_method"))
+			if handleMethod == "%!s(<nil>)" {
+				handleMethod = "-"
 			}
-			handleMmethod = fmt.Sprintf("%-22s", handleMmethod)
+			handleMethod = fmt.Sprintf("%-22s", handleMethod)
 			clientIP := c.RealIP()
 			method := req.Method
 			statusCode := res.Status
@@ -69,7 +69,7 @@ func Logger(logger logger.Logger) echo.MiddlewareFunc {
 			}
 
 			logger.Infof("[Echo] %-10s|%s %3d %s| %13v | %s |%s  %s %-7s %s %s %s",
-				handleMmethod, statusColor, statusCode, reset,
+				handleMethod, statusColor, statusCode, reset,
 				latency,
 				clientIP,
 				methodColor, reset, method,
