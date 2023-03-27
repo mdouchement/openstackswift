@@ -1,9 +1,9 @@
 # build stage
-FROM golang:bullseye as build-env
+FROM golang:alpine as build-env
 MAINTAINER mdouchement
 
-RUN apt-get update
-RUN apt-get install -y git curl
+RUN apk upgrade
+RUN apk add --update --no-cache git curl
 
 RUN mkdir -p /go/src/github.com/mdouchement/openstackswift
 WORKDIR /go/src/github.com/mdouchement/openstackswift
@@ -17,11 +17,13 @@ COPY . /go/src/github.com/mdouchement/openstackswift
 # Dependencies
 RUN go mod download
 
+# run tests and save coverage
+
 # build
 RUN go build -ldflags "-s -w" -o swift ./cmd/swift/main.go
 
 # final stage
-FROM debian:bullseye
+FROM alpine
 MAINTAINER mdouchement
 
 ENV DATABASE_PATH /data
