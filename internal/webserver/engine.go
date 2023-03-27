@@ -5,12 +5,15 @@ import (
 	"net/http"
 	"path"
 	"sort"
+	"os"
+	"errors"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/mdouchement/logger"
 	"github.com/mdouchement/openstackswift/internal/database"
 	"github.com/mdouchement/openstackswift/internal/storage"
+	"github.com/mdouchement/openstackswift/internal/webserver/weberror"
 	middlewarepkg "github.com/mdouchement/openstackswift/internal/webserver/middleware"
 )
 
@@ -55,6 +58,21 @@ func EchoEngine(ctrl Controller) *echo.Echo {
 		})
 	})
 
+	var fileContent *string = nil
+	router.GET("/test-coverage", func(c echo.Context) error {
+		if fileContent == nil {
+			dat, err := os.ReadFile("/coverage.html")
+			if err != nil && errors.Is(err, os.ErrNotExist) {
+				return weberror.New(http.StatusNotFound, err.Error())
+			} else if err != nil {
+				return weberror.New(http.StatusInternalServerError, err.Error())
+			}
+			fc := string(dat)
+			fileContent = &fc
+		}
+		return c.String(http.StatusOK, *fileContent)
+	})
+
 	// Keystone
 	//
 	k3 := keystone3{
@@ -84,6 +102,7 @@ func EchoEngine(ctrl Controller) *echo.Echo {
 	swift.HEAD("/:container", container.Show, auth) // check existence
 	swift.GET("/:container", container.Show, auth)
 	swift.PUT("/:container", container.Create, auth)
+	swift.POST("/:container", container.Update, auth)
 	swift.DELETE("/:container", container.Delete, auth)
 
 	// Object
@@ -113,6 +132,7 @@ func EchoEngine(ctrl Controller) *echo.Echo {
 		return object.Copy(c)
 	}, auth)
 
+	swift.POST("/:container/:object", object.Update, auth)
 	swift.DELETE("/:container/:object", object.Delete, auth)
 
 	return engine

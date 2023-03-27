@@ -2,6 +2,7 @@ package webserver
 
 import (
 	"net/http"
+	"strings"
 	"strconv"
 	"time"
 
@@ -18,14 +19,23 @@ import (
 
 type object struct {
 	logger  logger.Logger
-	db      database.Client
+	db		database.Client
 	storage storage.Backend
+}
+
+
+func (h *object) setHeadersFromMeta(c echo.Context, metas []*model.Meta) error {
+	for _, meta := range metas {
+		c.Response().Header().Set(meta.Key, meta.Value)
+	}
+	return nil
 }
 
 func (h *object) Show(c echo.Context) error {
 	c.Set("handler_method", "object.Show")
 
-	container, manifest, object, err := h.load(c.Param("container"), c.Param("object"))
+	container, manifest, object, metas, err := h.load(c.Param("container"), c.Param("object"))
+
 	if err != nil {
 		return weberror.New(http.StatusInternalServerError, err.Error())
 	}
@@ -48,6 +58,9 @@ func (h *object) Show(c echo.Context) error {
 
 	//
 
+	h.logger.Debugf("object.Show: meta %v", metas)
+	h.setHeadersFromMeta(c, metas)
+
 	c.Response().Header().Set("Date", time.Now().UTC().Format(http.TimeFormat))
 	c.Response().Header().Set("X-Timestamp", strconv.FormatInt(object.CreatedAt.Unix(), 10))
 	c.Response().Header().Set("Content-Type", object.ContentType)
@@ -62,7 +75,7 @@ func (h *object) Show(c echo.Context) error {
 func (h *object) Download(c echo.Context) error {
 	c.Set("handler_method", "object.Download")
 
-	container, manifest, object, err := h.load(c.Param("container"), c.Param("object"))
+	container, manifest, object, _, err := h.load(c.Param("container"), c.Param("object"))
 	if err != nil {
 		return weberror.New(http.StatusInternalServerError, err.Error())
 	}
@@ -98,10 +111,61 @@ func (h *object) Download(c echo.Context) error {
 	return c.Stream(http.StatusOK, downloader.ContentType(), r)
 }
 
+func (h *object) Update(c echo.Context) error {
+	c.Set("handler_method", "object.Update")
+
+	container, manifest, object, metas, err := h.load(c.Param("container"), c.Param("object"))
+	if err != nil {
+		return weberror.New(http.StatusInternalServerError, err.Error())
+	}
+	if container == nil {
+		return weberror.New(http.StatusNotFound, swift.ContainerNotFound.Text)
+	}
+
+	h.logger.Debug("object.Update: already set meta", metas)
+
+	if manifest == nil && object == nil {
+		return weberror.New(http.StatusNotFound, swift.ObjectNotFound.Text)
+	}
+
+	if object == nil {
+		object = new(model.Object)
+		object.CreatedAt = manifest.CreatedAt
+		object.ContentType = manifest.ContentType
+		object.Size = manifest.Size
+		object.Checksum = manifest.Checksum
+	}
+
+	//
+
+	for key, values := range c.Request().Header {
+		if (!strings.HasPrefix(key, "X-Object-Meta-") && len(values) > 0 ) {
+			continue
+		}
+		h.logger.Debugf("object.Update: add meta %v: %v for key %v", key, values[0], c.Param("object"))
+		// set metadata
+		_, err := h.db.AddMeta(container.ID, c.Param("object"), key, values[0])
+		if err != nil {
+			return weberror.New(http.StatusInternalServerError, err.Error())
+		}
+		// if "" delete also ?
+	}
+
+	//
+
+	c.Response().Header().Set("Content-Length", "0")
+	c.Response().Header().Set("Content-Type", object.ContentType)
+	c.Response().Header().Set("Date", time.Now().UTC().Format(http.TimeFormat))
+	c.Response().Header().Set("X-Timestamp", strconv.FormatInt(object.CreatedAt.Unix(), 10))
+	return c.NoContent(http.StatusAccepted)
+}
+
+
+
 func (h *object) Upload(c echo.Context) error {
 	c.Set("handler_method", "object.Upload")
 
-	container, _, object, err := h.load(c.Param("container"), c.Param("object"))
+	container, _, object, _, err := h.load(c.Param("container"), c.Param("object"))
 	if err != nil {
 		return weberror.New(http.StatusInternalServerError, err.Error())
 	}
@@ -150,7 +214,7 @@ func (h *object) Upload(c echo.Context) error {
 func (h *object) Manifest(c echo.Context) error {
 	c.Set("handler_method", "object.Manifest")
 
-	container, manifest, _, err := h.load(c.Param("container"), c.Param("object"))
+	container, manifest, _, _, err := h.load(c.Param("container"), c.Param("object"))
 	if err != nil {
 		return weberror.New(http.StatusInternalServerError, err.Error())
 	}
@@ -194,7 +258,7 @@ func (h *object) Copy(c echo.Context) error {
 
 	//
 
-	container, manifest, object, err := h.load(cname, oname)
+	container, manifest, object, _, err := h.load(cname, oname)
 	if err != nil {
 		return weberror.New(http.StatusInternalServerError, err.Error())
 	}
@@ -238,7 +302,7 @@ func (h *object) Copy(c echo.Context) error {
 func (h *object) Delete(c echo.Context) error {
 	c.Set("handler_method", "object.Delete")
 
-	container, manifest, object, err := h.load(c.Param("container"), c.Param("object"))
+	container, manifest, object, _, err := h.load(c.Param("container"), c.Param("object"))
 	if err != nil {
 		return weberror.New(http.StatusInternalServerError, err.Error())
 	}
@@ -249,11 +313,14 @@ func (h *object) Delete(c echo.Context) error {
 	//
 
 	var destroyer service.Destroyer
+	var okey string
 	switch {
 	case manifest != nil:
 		destroyer = service.NewManifestDestroyer(h.db, h.storage, container, manifest)
+		okey = manifest.Key
 	case object != nil:
 		destroyer = service.NewObjectDestroyer(h.db, h.storage, container, object)
+		okey = object.Key
 	default:
 		return weberror.New(http.StatusNotFound, swift.ObjectNotFound.Text)
 	}
@@ -266,43 +333,63 @@ func (h *object) Delete(c echo.Context) error {
 	}
 
 	//
+	h.logger.Debug("object.Delete: delete all data for key", okey);
+	h.db.DeleteAllMetas(container.ID, okey)
 
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *object) load(containername, objectname string) (*model.Container, *model.Manifest, *model.Object, error) {
+func (h *object) load(containername, objectname string) (*model.Container, *model.Manifest, *model.Object, []*model.Meta, error) {
 	container, err := h.db.FindContainerByName(containername)
 	if err != nil {
 		if h.db.IsNotFound(err) {
-			return nil, nil, nil, nil
+			return nil, nil, nil, nil, nil
 		}
-
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	//
 
 	object, err := h.db.FindObjectByKey(container.ID, objectname)
 	if err != nil && !h.db.IsNotFound(err) {
-		return container, nil, nil, err
-	}
-	if !h.db.IsNotFound(err) {
-		return container, nil, object, nil
-	}
-
-	object = nil
-
-	//
-
-	manifest, err := h.db.FindManifestByKey(container.ID, objectname)
-	if err != nil && !h.db.IsNotFound(err) {
-		return container, nil, nil, err
+		return container, nil, nil, nil, err
 	}
 	if h.db.IsNotFound(err) {
-		manifest = nil
+		object = nil
 	}
 
 	//
 
-	return container, manifest, object, nil
+	var manifest *model.Manifest = nil
+
+	if object == nil {
+		// Only fetch if no object is found
+		manifest, err = h.db.FindManifestByKey(container.ID, objectname)
+		if err != nil && !h.db.IsNotFound(err) {
+			return container, nil, nil, nil, err
+		}
+		if h.db.IsNotFound(err) {
+			manifest = nil
+		}
+	}
+
+	//
+
+	var metas []*model.Meta = nil
+
+	// Fetch meta data for manifest or object
+	if object != nil || manifest != nil {
+		metas, err = h.db.FindMeta(container.ID, objectname)
+
+		if err != nil && !h.db.IsNotFound(err) {
+			return container, manifest, object, nil, err
+		}
+	}
+
+	// always empyt list
+	if metas == nil {
+		metas = make([]*model.Meta, 0)
+	}
+
+	return container, manifest, object, metas, nil
 }

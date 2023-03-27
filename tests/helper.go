@@ -18,12 +18,12 @@ import (
 func setup() (*swift.Connection, func()) {
 	log := logrus.New()
 	log.SetFormatter(&logger.LogrusTextFormatter{
-		DisableColors:   false,
-		ForceColors:     true,
-		ForceFormatting: true,
-		PrefixRE:        regexp.MustCompile(`^(\[.*?\])\s`),
-		FullTimestamp:   true,
-		TimestampFormat: "2006-01-02 15:04:05",
+		DisableColors:      false,
+		ForceColors:        true,
+		ForceFormatting:    true,
+		PrefixRE:           regexp.MustCompile(`^(\[.*?\])\s`),
+		FullTimestamp:      true,
+		TimestampFormat:    "2006-01-02 15:04:05",
 	})
 
 	//
