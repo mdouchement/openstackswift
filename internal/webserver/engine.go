@@ -84,6 +84,7 @@ func EchoEngine(ctrl Controller) *echo.Echo {
 	swift.HEAD("/:container", container.Show, auth) // check existence
 	swift.GET("/:container", container.Show, auth)
 	swift.PUT("/:container", container.Create, auth)
+	swift.POST("/:container", container.Update, auth)
 	swift.DELETE("/:container", container.Delete, auth)
 
 	// Object
@@ -113,6 +114,7 @@ func EchoEngine(ctrl Controller) *echo.Echo {
 		return object.Copy(c)
 	}, auth)
 
+	swift.POST("/:container/:object", object.Update, auth)
 	swift.DELETE("/:container/:object", object.Delete, auth)
 
 	return engine

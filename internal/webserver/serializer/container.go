@@ -32,6 +32,8 @@ func Containers(containers []*model.Container) []map[string]interface{} {
 func Container(container *model.Container) map[string]interface{} {
 	return map[string]interface{}{
 		"name":         container.Name,
+		"count":        container.Count,
+		"bytes":        container.Bytes,
 		"last_updated": container.UpdatedAt,
 	}
 }

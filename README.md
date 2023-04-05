@@ -39,11 +39,30 @@ SWIFT_STORAGE_PASSWORD
 
 MIT. See the [LICENSE](https://github.com/mdouchement/openstackswift/blob/master/LICENSE) for more details.
 
-## Contributing
+## Development
+
+### Building
+```
+go build -ldflags "-s -w" -o swift ./cmd/swift/main.go
+```
+
+### Testing
+Running tests with coverage
+```
+go test -coverpkg=./internal/database,./internal/model,./internal/scheduler,./internal/storage,./internal/webserver,./internal/webserver/middleware,./internal/webserver/serializer,./internal/webserver/service,./internal/webserver/weberror,./internal/xpath,./tests -coverprofile=cprof.out -v ./tests/
+go tool cover -html=cprof.out -o coverage.html
+
+```
+### Build docker
+
+```
+docker build . -t openstackswift
+```
+### Contributing
 
 1. Fork it
 2. Create your feature branch (git checkout -b my-new-feature)
 3. Commit your changes (git commit -am 'Add some feature')
-4. Ensure specs and Rubocop pass
+4. Ensure its building and that the tests pass
 5. Push to the branch (git push origin my-new-feature)
 6. Create new Pull Request

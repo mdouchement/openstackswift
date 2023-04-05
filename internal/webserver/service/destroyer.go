@@ -69,11 +69,16 @@ func NewObjectDestroyer(database database.Client, storage storage.Backend, conta
 func (s *ObjectDestroyer) Destroy() error {
 	err := s.storage.Remove(s.container.Name, s.object.Key)
 	if err != nil {
-		return errors.Wrap(err, "ObjectDestroyer")
+		return errors.Wrap(err, "ObjectDestroyer storage")
+	}
+
+	err = s.database.DeleteAllMetas(s.container.ID, s.object.ID)
+	if err != nil && !s.database.IsNotFound(err) {
+		return errors.Wrap(err, "ObjectDestroyer meta")
 	}
 
 	err = s.database.DeleteObject(s.object.ID)
-	return errors.Wrap(err, "ObjectDestroyer")
+	return errors.Wrap(err, "ObjectDestroyer object")
 }
 
 //
@@ -101,28 +106,33 @@ func NewManifestDestroyer(database database.Client, storage storage.Backend, con
 func (s *ManifestDestroyer) Destroy() error {
 	objects, err := s.database.FindObjectsByManifestID(s.manifest.ID)
 	if err != nil {
-		return errors.Wrap(err, "ManifestDestroyer")
+		return errors.Wrap(err, "ManifestDestroyer find manifest")
 	}
 
 	for _, object := range objects {
 		container, err := s.database.FindContainer(object.ContainerID)
 		if err != nil {
-			return errors.Wrap(err, "ManifestDestroyer")
+			return errors.Wrap(err, "ManifestDestroyer find container")
 		}
 
 		err = s.storage.Remove(container.Name, object.Key)
 		if err != nil {
-			return errors.Wrap(err, "ManifestDestroyer")
+			return errors.Wrap(err, "ManifestDestroyer storage")
 		}
 
 		err = s.database.DeleteObject(object.ID)
 		if err != nil {
-			return errors.Wrap(err, "ManifestDestroyer")
+			return errors.Wrap(err, "ManifestDestroyer object")
 		}
 	}
+
+	err = s.database.DeleteAllMetas(s.container.ID, s.manifest.ID)
+	if err != nil && !s.database.IsNotFound(err) {
+		return errors.Wrap(err, "ManifestDestroyer meta")
+    }
 
 	//
 
 	err = s.database.DeleteManifest(s.manifest.ID)
-	return errors.Wrap(err, "ManifestDestroyer")
+	return errors.Wrap(err, "ManifestDestroyer manifest")
 }

@@ -96,7 +96,7 @@ func (c *strm) IsNotFound(err error) bool {
 
 func (c *strm) ListContainers() ([]*model.Container, error) {
 	containers := make([]*model.Container, 0)
-	err := c.db.All(&containers)
+	err := c.db.AllByIndex("Name", &containers)
 	return containers, errors.Wrap(err, "could not get all containers")
 }
 
@@ -127,15 +127,18 @@ func (c *strm) AllObjects() ([]*model.Object, error) {
 	return objects, errors.Wrap(err, "could not get all objects")
 }
 
-func (c *strm) FindObjectsByContainerID(id string) ([]*model.Object, error) {
+func (c *strm) FindObjectsByContainerID(id string, limit int, prefix string) ([]*model.Object, error) {
 	objects := make([]*model.Object, 0)
-	err := c.db.Select(q.Eq("ContainerID", id)).Find(&objects)
+	if (limit == 0) {
+		limit = -1
+	}
+	err := c.db.Select(q.Eq("ContainerID", id), q.Re("Key", "^" + prefix)).Limit(limit).OrderBy("Key").Find(&objects)
 	return objects, errors.Wrap(err, "could not get objects by container_id")
 }
 
 func (c *strm) FindObjectsByManifestID(id string) ([]*model.Object, error) {
 	objects := make([]*model.Object, 0)
-	err := c.db.Select(q.Eq("ManifestID", id)).OrderBy("CreatedAt").Find(&objects)
+	err := c.db.Select(q.Eq("ManifestID", id)).OrderBy("CreatedAt").OrderBy("Key").Find(&objects)
 	return objects, errors.Wrap(err, "could not get objects by manifest_id")
 }
 
@@ -163,4 +166,35 @@ func (c *strm) FindManifestByKey(cid, key string) (*model.Manifest, error) {
 func (c *strm) DeleteManifest(id string) error {
 	err := c.db.Select(q.Eq("ID", id)).Delete(&model.Manifest{})
 	return errors.Wrap(err, "could not delete manifest")
+}
+
+//
+// Meta
+//
+func (c *strm) AddMeta(cid, okey string, key string, value string) (*model.Meta, error) {
+	var meta_model = new(model.Meta)
+	meta_model.ContainerID = cid
+	meta_model.ObjectKey = okey
+	meta_model.Key = key
+	meta_model.Value = value
+	if err := c.Save(meta_model); err != nil {
+		return nil, errors.Wrap(err, "could not save meta")
+	}
+	return meta_model, nil
+}
+
+func (c *strm) FindMeta(cid, okey string) ([]*model.Meta, error) {
+	var metas = make([]*model.Meta, 0)
+	err := c.db.Select(q.Eq("ContainerID", cid), q.Eq("ObjectKey", okey)).Find(&metas)
+	return metas, errors.Wrap(err, "could not find metas")
+}
+
+func (c *strm) DeleteMeta(cid, okey string, key string) (error) {
+	err := c.db.Select(q.Eq("ContainerID", cid), q.Eq("ObjectKey", okey), q.Eq("Key", key)).Delete(&model.Meta{})
+	return errors.Wrap(err, "could not delete meta")
+}
+
+func (c *strm) DeleteAllMetas(cid, okey string) (error) {
+	err := c.db.Select(q.Eq("ContainerID", cid), q.Eq("ObjectKey", okey)).Delete(&model.Meta{})
+	return errors.Wrap(err, "could not delete all metas")
 }

@@ -19,6 +19,7 @@ type (
 		ContainerInteraction
 		ManifestInteraction
 		ObjectInteraction
+		MetaInteraction
 	}
 
 	// A ContainerInteraction defines all the methods used to interact with a container record.
@@ -38,9 +39,16 @@ type (
 	// A ObjectInteraction defines all the methods used to interact with a object record.
 	ObjectInteraction interface {
 		AllObjects() ([]*model.Object, error)
-		FindObjectsByContainerID(id string) ([]*model.Object, error)
+		FindObjectsByContainerID(id string, limit int, prefix string) ([]*model.Object, error)
 		FindObjectsByManifestID(id string) ([]*model.Object, error)
 		FindObjectByKey(cid, key string) (*model.Object, error)
 		DeleteObject(id string) error
+	}
+
+	MetaInteraction interface {
+		AddMeta(cid, okey string, key string, value string) (*model.Meta, error)
+		FindMeta(cid, okey string) ([]*model.Meta, error)
+		DeleteMeta(cid, okey string, key string) (error)
+		DeleteAllMetas(cid, okey string) (error)
 	}
 )
