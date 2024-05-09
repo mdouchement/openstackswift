@@ -1,12 +1,12 @@
 module github.com/mdouchement/openstackswift
 
-go 1.21
+go 1.22
 
 require (
 	github.com/asdine/storm/v3 v3.2.1
 	github.com/gofrs/uuid v4.4.0+incompatible
-	github.com/labstack/echo/v4 v4.11.4
-	github.com/mdouchement/logger v0.0.0-20231201121128-2bebbcf0fdea
+	github.com/labstack/echo/v4 v4.12.0
+	github.com/mdouchement/logger v0.0.0-20240212102128-d36bb9ae9641
 	github.com/ncw/swift/v2 v2.0.2
 	github.com/pkg/errors v0.9.1
 	github.com/robfig/cron/v3 v3.0.1
@@ -27,12 +27,12 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
-	go.etcd.io/bbolt v1.3.8 // indirect
-	golang.org/x/crypto v0.17.0 // indirect
-	golang.org/x/net v0.19.0 // indirect
-	golang.org/x/sys v0.15.0 // indirect
-	golang.org/x/term v0.15.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	go.etcd.io/bbolt v1.3.10 // indirect
+	golang.org/x/crypto v0.23.0 // indirect
+	golang.org/x/net v0.25.0 // indirect
+	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/term v0.20.0 // indirect
+	golang.org/x/text v0.15.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
