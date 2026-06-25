@@ -81,6 +81,7 @@ func EchoEngine(ctrl Controller) *echo.Echo {
 		db:     ctrl.Database,
 	}
 	swift.GET("", container.List, auth)
+	swift.GET("/", container.List, auth) // tolerate a trailing slash (/v1/AUTH_x/)
 	swift.HEAD("/:container", container.Show, auth) // check existence
 	swift.GET("/:container", container.Show, auth)
 	swift.PUT("/:container", container.Create, auth)
