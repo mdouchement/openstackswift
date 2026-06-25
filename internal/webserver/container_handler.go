@@ -112,13 +112,15 @@ func (h *container) Show(c echo.Context) error {
 	case http.MethodHead:
 		return c.NoContent(http.StatusOK)
 	case http.MethodGet:
-		prefix := c.Request().Header.Get("prefix")
+		prefix := c.QueryParam("prefix")
+		delimiter := c.QueryParam("delimiter")
 
 		if c.Request().Header.Get("Accept") == "text/plain" {
 			return c.String(http.StatusOK, serializer.TextObjects(objects, prefix))
 		}
 		// "application/json"
-		return c.JSON(http.StatusOK, serializer.Objects(objects, prefix))
+		return c.JSON(http.StatusOK,
+			serializer.ObjectsWithDelimiter(objects, prefix, delimiter))
 	}
 	return weberror.New(http.StatusNotFound, swift.BadRequest.Text)
 }
