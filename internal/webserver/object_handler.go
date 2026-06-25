@@ -31,6 +31,20 @@ func (h *object) setHeadersFromMeta(c echo.Context, metas []*model.Meta) error {
 	return nil
 }
 
+// storeObjectMeta persists the request's X-Object-Meta-* headers as object
+// metadata.
+func (h *object) storeObjectMeta(c echo.Context, containerID, objectKey string) error {
+	for key, values := range c.Request().Header {
+		if !strings.HasPrefix(key, "X-Object-Meta-") || len(values) == 0 {
+			continue
+		}
+		if _, err := h.db.AddMeta(containerID, objectKey, key, c.Request().Header.Get(key)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (h *object) Show(c echo.Context) error {
 	c.Set("handler_method", "object.Show")
 
@@ -75,7 +89,7 @@ func (h *object) Show(c echo.Context) error {
 func (h *object) Download(c echo.Context) error {
 	c.Set("handler_method", "object.Download")
 
-	container, manifest, object, _, err := h.load(c.Param("container"), c.Param("object"))
+	container, manifest, object, metas, err := h.load(c.Param("container"), c.Param("object"))
 	if err != nil {
 		return weberror.New(http.StatusInternalServerError, err.Error())
 	}
@@ -105,6 +119,7 @@ func (h *object) Download(c echo.Context) error {
 
 	c.Response().Header().Set(echo.HeaderContentLength, strconv.FormatInt(downloader.Size(), 10))
 	c.Response().Header().Set("Etag", downloader.Checksum())
+	h.setHeadersFromMeta(c, metas)
 	if object != nil && !object.TTL.IsZero() {
 		c.Response().Header().Set("X-Delete-At", strconv.FormatInt(object.TTL.Unix(), 10))
 	}
@@ -138,17 +153,8 @@ func (h *object) Update(c echo.Context) error {
 
 	//
 
-	for key, values := range c.Request().Header {
-		if (!strings.HasPrefix(key, "X-Object-Meta-") && len(values) > 0 ) {
-			continue
-		}
-		h.logger.Debugf("object.Update: add meta %v: %v for key %v", key, values[0], c.Param("object"))
-		// set metadata
-		_, err := h.db.AddMeta(container.ID, c.Param("object"), key, values[0])
-		if err != nil {
-			return weberror.New(http.StatusInternalServerError, err.Error())
-		}
-		// if "" delete also ?
+	if err := h.storeObjectMeta(c, container.ID, c.Param("object")); err != nil {
+		return weberror.New(http.StatusInternalServerError, err.Error())
 	}
 
 	//
@@ -198,6 +204,10 @@ func (h *object) Upload(c echo.Context) error {
 	//
 
 	if err := h.db.Save(object); err != nil {
+		return weberror.New(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := h.storeObjectMeta(c, container.ID, object.Key); err != nil {
 		return weberror.New(http.StatusInternalServerError, err.Error())
 	}
 
