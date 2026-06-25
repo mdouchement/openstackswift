@@ -39,7 +39,7 @@ type (
 	// A ObjectInteraction defines all the methods used to interact with a object record.
 	ObjectInteraction interface {
 		AllObjects() ([]*model.Object, error)
-		FindObjectsByContainerID(id string, limit int, prefix string) ([]*model.Object, error)
+		FindObjectsByContainerID(id string, limit int, prefix, marker string) ([]*model.Object, error)
 		FindObjectsByManifestID(id string) ([]*model.Object, error)
 		FindObjectByKey(cid, key string) (*model.Object, error)
 		DeleteObject(id string) error
