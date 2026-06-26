@@ -167,7 +167,13 @@ func (h *container) Update(c echo.Context) error {
 
 	// Create and update metadata
 	for key, values := range c.Request().Header {
-		if (!strings.HasPrefix(key, "X-Container-Meta-") && len(values) > 0 ) {
+		if len(values) == 0 {
+			continue
+		}
+		// Persist user metadata along with the read/write access-control
+		// headers so that container ACLs survive a round-trip.
+		if !strings.HasPrefix(key, "X-Container-Meta-") &&
+			key != "X-Container-Read" && key != "X-Container-Write" {
 			continue
 		}
 		// no string to mark only container
