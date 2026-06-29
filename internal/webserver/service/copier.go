@@ -59,9 +59,23 @@ func (s *ObjectCopier) Copy(containername, objectname string) error {
 	object.Checksum = s.object.Checksum
 	object.Size = s.object.Size
 
-	err = s.database.Save(object)
+	if err = s.database.Save(object); err != nil {
+		return errors.Wrap(err, "ObjectCopier")
+	}
+
+	// Preserve the source object's user metadata (X-Object-Meta-*) on the copy.
+	metas, err := s.database.FindMeta(s.container.ID, s.object.Key)
+	if err != nil && !s.database.IsNotFound(err) {
+		return errors.Wrap(err, "ObjectCopier")
+	}
+	for _, meta := range metas {
+		if _, err := s.database.AddMeta(container.ID, objectname, meta.Key, meta.Value); err != nil {
+			return errors.Wrap(err, "ObjectCopier")
+		}
+	}
+
 	s.createdAt = *object.CreatedAt
-	return errors.Wrap(err, "ObjectCopier")
+	return nil
 }
 
 func (s *ObjectCopier) CreatedAt() time.Time {
