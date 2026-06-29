@@ -1,6 +1,7 @@
 package database
 
 import (
+	"regexp"
 	"time"
 
 	"github.com/asdine/storm/v3"
@@ -132,7 +133,9 @@ func (c *strm) FindObjectsByContainerID(id string, limit int, prefix string) ([]
 	if (limit == 0) {
 		limit = -1
 	}
-	err := c.db.Select(q.Eq("ContainerID", id), q.Re("Key", "^" + prefix)).Limit(limit).OrderBy("Key").Find(&objects)
+	// prefix is a literal object-name prefix (Swift listing semantics), not a regexp,
+	// so escape any regexp metacharacters before anchoring it with "^".
+	err := c.db.Select(q.Eq("ContainerID", id), q.Re("Key", "^" + regexp.QuoteMeta(prefix))).Limit(limit).OrderBy("Key").Find(&objects)
 	return objects, errors.Wrap(err, "could not get objects by container_id")
 }
 
