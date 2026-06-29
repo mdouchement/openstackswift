@@ -1,6 +1,6 @@
 # build stage
-FROM golang:bullseye as build-env
-MAINTAINER mdouchement
+FROM golang:trixie AS build-env
+LABEL org.opencontainers.image.authors="mdouchement"
 
 RUN apt-get update
 RUN apt-get install -y git curl
@@ -8,9 +8,8 @@ RUN apt-get install -y git curl
 RUN mkdir -p /go/src/github.com/mdouchement/openstackswift
 WORKDIR /go/src/github.com/mdouchement/openstackswift
 
-ENV CGO_ENABLED 0
-ENV GO111MODULE on
-ENV GOPROXY https://proxy.golang.org
+ENV CGO_ENABLED=0
+ENV GOPROXY=https://proxy.golang.org
 
 COPY . /go/src/github.com/mdouchement/openstackswift
 
@@ -21,11 +20,11 @@ RUN go mod download
 RUN go build -ldflags "-s -w" -o swift ./cmd/swift/main.go
 
 # final stage
-FROM debian:bullseye
-MAINTAINER mdouchement
+FROM debian:trixie
+LABEL org.opencontainers.image.authors="mdouchement"
 
-ENV DATABASE_PATH /data
-ENV STORAGE_PATH /data
+ENV DATABASE_PATH=/data
+ENV STORAGE_PATH=/data
 
 RUN mkdir -p ${STORAGE_PATH}
 
