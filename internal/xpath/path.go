@@ -13,6 +13,11 @@ func Entities(p string) (container, object string) {
 		p = cp
 	}
 
+	// Swift's X-Copy-From and Destination headers are conventionally written
+	// with a leading slash ("/container/object"); drop it so the container is
+	// not parsed as an empty segment.
+	p = strings.TrimPrefix(p, "/")
+
 	artifacts := strings.Split(p, "/")
 	if len(artifacts) < 2 {
 		return artifacts[0], ""
