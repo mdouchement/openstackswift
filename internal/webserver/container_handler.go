@@ -131,7 +131,8 @@ func (h *container) Create(c echo.Context) error {
 		return weberror.New(http.StatusInternalServerError, err.Error())
 	}
 
-	if h.db.IsNotFound(err) {
+	created := h.db.IsNotFound(err)
+	if created {
 		container = &model.Container{Name: c.Param("container"), Count: 0, Bytes: 0}
 		err = h.db.Save(container)
 		if err != nil {
@@ -143,7 +144,12 @@ func (h *container) Create(c echo.Context) error {
 
 	c.Response().Header().Set("Date", time.Now().UTC().Format(http.TimeFormat))
 	c.Response().Header().Set("X-Timestamp", strconv.FormatInt(container.CreatedAt.Unix(), 10))
-	return c.NoContent(http.StatusCreated)
+	// Swift returns 201 Created for a newly created container and 202 Accepted
+	// when the container already existed.
+	if created {
+		return c.NoContent(http.StatusCreated)
+	}
+	return c.NoContent(http.StatusAccepted)
 }
 
 // sets meta data for container
