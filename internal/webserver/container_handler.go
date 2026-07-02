@@ -72,7 +72,7 @@ func (h *container) Show(c echo.Context) error {
 
 	h.logger.Debugf("container Show: container %v limit=%v prefix=%v", c.Param("container"), limit, c.QueryParam("prefix"))
 
-	objects, err := h.db.FindObjectsByContainerID(container.ID, limit, c.QueryParam("prefix"))
+	objects, err := h.db.FindObjectsByContainerID(container.ID, limit, c.QueryParam("prefix"), c.QueryParam("marker"))
 
 	/*
 	// Delimiter spliter maybe can be removed
@@ -202,7 +202,7 @@ func (h *container) Delete(c echo.Context) error {
 
 	//
 
-	objects, err := h.db.FindObjectsByContainerID(container.ID, 1, "")
+	objects, err := h.db.FindObjectsByContainerID(container.ID, 1, "", "")
 	if err != nil && !h.db.IsNotFound(err) {
 		return weberror.New(http.StatusInternalServerError, err.Error())
 	}

@@ -128,14 +128,23 @@ func (c *strm) AllObjects() ([]*model.Object, error) {
 	return objects, errors.Wrap(err, "could not get all objects")
 }
 
-func (c *strm) FindObjectsByContainerID(id string, limit int, prefix string) ([]*model.Object, error) {
+func (c *strm) FindObjectsByContainerID(id string, limit int, prefix, marker string) ([]*model.Object, error) {
 	objects := make([]*model.Object, 0)
 	if (limit == 0) {
 		limit = -1
 	}
 	// prefix is a literal object-name prefix (Swift listing semantics), not a regexp,
 	// so escape any regexp metacharacters before anchoring it with "^".
-	err := c.db.Select(q.Eq("ContainerID", id), q.Re("Key", "^" + regexp.QuoteMeta(prefix))).Limit(limit).OrderBy("Key").Find(&objects)
+	matchers := []q.Matcher{
+		q.Eq("ContainerID", id),
+		q.Re("Key", "^" + regexp.QuoteMeta(prefix)),
+	}
+	// marker (Swift listing pagination): return only objects whose key sorts
+	// strictly after it, so the limit applies to the page that follows.
+	if marker != "" {
+		matchers = append(matchers, q.Gt("Key", marker))
+	}
+	err := c.db.Select(matchers...).Limit(limit).OrderBy("Key").Find(&objects)
 	return objects, errors.Wrap(err, "could not get objects by container_id")
 }
 
