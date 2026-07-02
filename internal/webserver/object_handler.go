@@ -1,6 +1,7 @@
 package webserver
 
 import (
+	"io"
 	"net/http"
 	"strings"
 	"strconv"
@@ -103,11 +104,26 @@ func (h *object) Download(c echo.Context) error {
 	}
 	defer r.Close()
 
-	c.Response().Header().Set(echo.HeaderContentLength, strconv.FormatInt(downloader.Size(), 10))
+	c.Response().Header().Set("Content-Type", downloader.ContentType())
 	c.Response().Header().Set("Etag", downloader.Checksum())
 	if object != nil && !object.TTL.IsZero() {
 		c.Response().Header().Set("X-Delete-At", strconv.FormatInt(object.TTL.Unix(), 10))
 	}
+
+	// http.ServeContent honors Range/If-Range/If-Modified-Since (replying with
+	// 206 Partial Content and Content-Range when applicable) as long as the
+	// body is seekable.  Single objects are backed by *os.File; multi-segment
+	// manifests are not seekable and fall back to a full-body stream.
+	if rs, ok := r.(io.ReadSeeker); ok {
+		modtime := time.Time{}
+		if object != nil && object.CreatedAt != nil {
+			modtime = *object.CreatedAt
+		}
+		http.ServeContent(c.Response(), c.Request(), c.Param("object"), modtime, rs)
+		return nil
+	}
+
+	c.Response().Header().Set(echo.HeaderContentLength, strconv.FormatInt(downloader.Size(), 10))
 	return c.Stream(http.StatusOK, downloader.ContentType(), r)
 }
 
