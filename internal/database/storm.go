@@ -98,6 +98,10 @@ func (c *strm) IsNotFound(err error) bool {
 func (c *strm) ListContainers() ([]*model.Container, error) {
 	containers := make([]*model.Container, 0)
 	err := c.db.AllByIndex("Name", &containers)
+	if c.IsNotFound(err) {
+		// An empty account lists no containers; not an error.
+		return containers, nil
+	}
 	return containers, errors.Wrap(err, "could not get all containers")
 }
 
@@ -125,6 +129,10 @@ func (c *strm) DeleteContainer(id string) error {
 func (c *strm) AllObjects() ([]*model.Object, error) {
 	objects := make([]*model.Object, 0)
 	err := c.db.All(&objects)
+	if c.IsNotFound(err) {
+		// An empty database lists no objects; not an error.
+		return objects, nil
+	}
 	return objects, errors.Wrap(err, "could not get all objects")
 }
 
