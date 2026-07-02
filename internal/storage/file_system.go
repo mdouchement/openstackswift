@@ -26,25 +26,47 @@ func (b *fs) Name() string {
 }
 
 func (b *fs) Reader(container, object string) (io.ReadCloser, error) {
-	rc, err := os.Open(filepath.Join(b.workspace, container, object))
+	root, err := b.containerRoot(container, false)
 	if err != nil {
-		return rc, errors.Wrap(err, "could not open file")
+		return nil, errors.Wrap(err, "could not open file")
 	}
-	return rc, err
+	defer root.Close()
+
+	rc, err := root.Open(object)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not open file")
+	}
+	return rc, nil
 }
 
 func (b *fs) Writer(container, object string) (io.WriteCloser, error) {
-	b.mkdirAllWithFilename(container, object)
-
-	wc, err := os.Create(filepath.Join(b.workspace, container, object))
+	root, err := b.containerRoot(container, true)
 	if err != nil {
-		return wc, errors.Wrap(err, "could not create file")
+		return nil, errors.Wrap(err, "could not create file")
 	}
-	return wc, err
+	defer root.Close()
+
+	if dir := filepath.Dir(object); dir != "." {
+		if err := root.MkdirAll(dir, 0755); err != nil {
+			return nil, errors.Wrap(err, "could not create directory")
+		}
+	}
+
+	wc, err := root.Create(object)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not create file")
+	}
+	return wc, nil
 }
 
 func (b *fs) Copy(sc, so, dc, do string) error {
-	src, err := os.Open(filepath.Join(b.workspace, sc, so))
+	srcRoot, err := b.containerRoot(sc, false)
+	if err != nil {
+		return errors.Wrap(err, "copy: source")
+	}
+	defer srcRoot.Close()
+
+	src, err := srcRoot.Open(so)
 	if err != nil {
 		return errors.Wrap(err, "copy: source")
 	}
@@ -52,9 +74,19 @@ func (b *fs) Copy(sc, so, dc, do string) error {
 
 	//
 
-	b.mkdirAllWithFilename(dc, do)
+	dstRoot, err := b.containerRoot(dc, true)
+	if err != nil {
+		return errors.Wrap(err, "copy: destination")
+	}
+	defer dstRoot.Close()
 
-	dst, err := os.Create(filepath.Join(b.workspace, dc, do))
+	if dir := filepath.Dir(do); dir != "." {
+		if err := dstRoot.MkdirAll(dir, 0755); err != nil {
+			return errors.Wrap(err, "copy: destination")
+		}
+	}
+
+	dst, err := dstRoot.Create(do)
 	if err != nil {
 		return errors.Wrap(err, "copy: destination")
 	}
@@ -62,17 +94,31 @@ func (b *fs) Copy(sc, so, dc, do string) error {
 
 	//
 
-	_, err = io.Copy(dst, src)
-	if err != nil {
+	if _, err := io.Copy(dst, src); err != nil {
 		return errors.Wrap(err, "copy")
 	}
 
-	err = dst.Sync()
-	return errors.Wrap(err, "copy: destination")
+	return errors.Wrap(dst.Sync(), "copy: destination")
 }
 
 func (b *fs) FilenamesFrom(prefix string) ([]string, error) {
-	entries, err := os.ReadDir(filepath.Join(b.workspace, prefix))
+	root, err := os.OpenRoot(b.workspace)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+
+	name := prefix
+	if name == "" {
+		name = "."
+	}
+	dir, err := root.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer dir.Close()
+
+	entries, err := dir.ReadDir(-1)
 	if err != nil {
 		return nil, err
 	}
@@ -89,27 +135,43 @@ func (b *fs) FilenamesFrom(prefix string) ([]string, error) {
 	return filenames, nil
 }
 
-func (b *fs) Exist(container, object string) bool {
-	_, err := os.Stat(filepath.Join(b.workspace, container, object))
-	if err == nil {
-		return true
+func (b *fs) Remove(container, object string) error {
+	root, err := os.OpenRoot(b.workspace)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // nothing to delete
+		}
+		return errors.Wrap(err, "could not delete file")
 	}
-	if os.IsNotExist(err) {
-		return false
+	defer root.Close()
+
+	// RemoveAll(container) routes here with an empty object and drops the whole
+	// container directory.
+	if object == "" {
+		if err := root.RemoveAll(container); err != nil {
+			return errors.Wrap(err, "could not delete file")
+		}
+		return nil
 	}
-	return true // ignoring error
+
+	// Confine the object beneath its container so "../" cannot delete outside it.
+	croot, err := root.OpenRoot(container)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // container already gone
+		}
+		return errors.Wrap(err, "could not delete file")
+	}
+	defer croot.Close()
+
+	if err := croot.RemoveAll(object); err != nil {
+		return errors.Wrap(err, "could not delete file")
+	}
+	return nil
 }
 
 func (b *fs) RemoveAll(path string) error {
 	return b.Remove(path, "")
-}
-
-func (b *fs) Remove(container, object string) error {
-	err := os.RemoveAll(filepath.Join(b.workspace, container, object))
-	if err != nil {
-		return errors.Wrap(err, "could not delete file")
-	}
-	return nil
 }
 
 func (b *fs) Cleanup() error {
@@ -159,12 +221,30 @@ func (b *fs) Cleanup() error {
 	return nil
 }
 
-func (b *fs) mkdirAllWithFilename(container, object string) {
-	b.mkdirAll(container, filepath.Dir(object))
-}
-
-func (b *fs) mkdirAll(container, object string) {
-	if !b.Exist(container, object) {
-		os.MkdirAll(filepath.Join(b.workspace, container, object), 0755)
+// containerRoot returns an os.Root confined to the container's directory inside
+// the workspace.  Object names may legitimately contain "/" (pseudo-directories)
+// but cannot escape the container: os.Root resolves every path beneath the
+// workspace and then the container at the syscall level, rejecting "../"
+// traversal and symlinks rather than relying on string comparisons.  When
+// create is set the workspace and container directories are created first.
+func (b *fs) containerRoot(container string, create bool) (*os.Root, error) {
+	if create {
+		if err := os.MkdirAll(b.workspace, 0755); err != nil {
+			return nil, err
+		}
 	}
+
+	root, err := os.OpenRoot(b.workspace)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+
+	if create {
+		if err := root.MkdirAll(container, 0755); err != nil {
+			return nil, err
+		}
+	}
+
+	return root.OpenRoot(container)
 }
