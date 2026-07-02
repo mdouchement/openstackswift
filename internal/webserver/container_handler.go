@@ -140,7 +140,11 @@ func (h *container) Create(c echo.Context) error {
 		}
 	}
 
-	//
+	// Persist any read/write access-control headers (and user metadata) sent
+	// with the create; Swift accepts container ACLs on PUT, not only POST.
+	if err := h.storeContainerMeta(c, container); err != nil {
+		return weberror.New(http.StatusInternalServerError, err.Error())
+	}
 
 	c.Response().Header().Set("Date", time.Now().UTC().Format(http.TimeFormat))
 	c.Response().Header().Set("X-Timestamp", strconv.FormatInt(container.CreatedAt.Unix(), 10))
@@ -165,27 +169,33 @@ func (h *container) Update(c echo.Context) error {
 		return weberror.New(http.StatusNotFound, swift.ContainerNotFound.Text)
 	}
 
-	// Create and update metadata
-	for key, values := range c.Request().Header {
-		if len(values) == 0 {
-			continue
-		}
-		// Persist user metadata along with the read/write access-control
-		// headers so that container ACLs survive a round-trip.
-		if !strings.HasPrefix(key, "X-Container-Meta-") &&
-			key != "X-Container-Read" && key != "X-Container-Write" {
-			continue
-		}
-		// no string to mark only container
-		_, err := h.db.AddMeta(container.ID, "", key, values[0])
-		if err != nil {
-			return weberror.New(http.StatusInternalServerError, err.Error())
-		}
+	// Persist user metadata and the read/write access-control headers.
+	if err := h.storeContainerMeta(c, container); err != nil {
+		return weberror.New(http.StatusInternalServerError, err.Error())
 	}
 
 	c.Response().Header().Set("Date", time.Now().UTC().Format(http.TimeFormat))
 	c.Response().Header().Set("X-Timestamp", strconv.FormatInt(container.CreatedAt.Unix(), 10))
 	return c.NoContent(http.StatusAccepted)
+}
+
+// storeContainerMeta persists the request's X-Container-Meta-* headers and the
+// read/write access-control headers (X-Container-Read/Write) as container
+// metadata, so container ACLs survive a round-trip on both create and update.
+func (h *container) storeContainerMeta(c echo.Context, container *model.Container) error {
+	for key, values := range c.Request().Header {
+		if len(values) == 0 {
+			continue
+		}
+		if !strings.HasPrefix(key, "X-Container-Meta-") &&
+			key != "X-Container-Read" && key != "X-Container-Write" {
+			continue
+		}
+		if _, err := h.db.AddMeta(container.ID, "", key, values[0]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (h *container) Delete(c echo.Context) error {
